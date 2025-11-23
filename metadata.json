@@ -1,0 +1,8 @@
+{
+  "name": "Campus AI Scholar",
+  "description": "A comprehensive AI learning assistant for university students featuring Q&A, Knowledge Mapping, and Study Planning.",
+  "requestFramePermissions": [
+    "microphone",
+    "camera"
+  ]
+}
