@@ -3,9 +3,23 @@ import { AiQuestion, QuestionType, AiLearningPlan, KnowledgeNode } from "../type
 
 // NOTE: In a real app, use import.meta.env.VITE_GEMINI_API_KEY
 // For this generated code, we assume process.env.API_KEY is available or injected.
+// If running locally without config, you might need to hardcode your key here for testing:
+// const API_KEY = "YOUR_ACTUAL_KEY_HERE"; 
 const API_KEY = process.env.API_KEY || ''; 
 
 const ai = new GoogleGenAI({ apiKey: API_KEY });
+
+// Helper to clean JSON strings from Markdown formatting
+const parseJSON = (text: string) => {
+    try {
+        // Remove ```json and ``` wrappers if present
+        const cleanText = text.replace(/```json/g, '').replace(/```/g, '').trim();
+        return JSON.parse(cleanText);
+    } catch (e) {
+        console.error("JSON Parse Error:", e, "Text:", text);
+        return {};
+    }
+};
 
 // --- Q&A Chat Service ---
 
@@ -17,7 +31,7 @@ export interface ChatResponse {
 }
 
 export const createSolverChat = (): Chat => {
-  if (!API_KEY) throw new Error("API Key is missing.");
+  if (!API_KEY) throw new Error("API Key is missing. Please check your configuration.");
 
   return ai.chats.create({
     model: "gemini-2.5-flash",
@@ -31,7 +45,7 @@ export const createSolverChat = (): Chat => {
         4. List relevant knowledge points.
         
         If the user asks a follow-up (e.g., "Why step 2?"), explain it in the context of the previous problem.
-        ALWAYS return the response in strict JSON format as defined by the schema.
+        ALWAYS return the response in strict JSON format as defined by the schema. Do not wrap in markdown.
       `,
       responseMimeType: "application/json",
       responseSchema: {
@@ -62,11 +76,13 @@ export const sendChatMessage = async (chat: Chat, text: string, imageBase64?: st
   parts.push({ text: text });
 
   try {
+    // Corrected: Use 'message' property with parts structure
     const response = await chat.sendMessage({
-      parts: parts
+      message: { parts: parts }
     });
 
-    const result = JSON.parse(response.text || "{}");
+    const result = parseJSON(response.text || "{}");
+    
     return {
       type: result.type as QuestionType || QuestionType.GENERAL,
       answer: result.answer || "I could not generate an answer.",
@@ -118,7 +134,7 @@ export const generateStudyPlan = async (goal: string, currentLevel: string, dura
     }
   });
 
-  const data = JSON.parse(response.text || "{}");
+  const data = parseJSON(response.text || "{}");
   
   return {
     id: Date.now().toString(),
@@ -169,7 +185,7 @@ export const generateKnowledgeTree = async (subject: string): Promise<KnowledgeN
         }
     });
 
-    return JSON.parse(response.text || "{}") as KnowledgeNode;
+    return parseJSON(response.text || "{}") as KnowledgeNode;
 }
 
 // --- Resource Recommendation ---
@@ -177,7 +193,7 @@ export const generateKnowledgeTree = async (subject: string): Promise<KnowledgeN
 export const recommendResources = async (query: string): Promise<any[]> => {
     if (!API_KEY) return [];
     
-    // Using search grounding to find real resources
+    // Using search grounding to find real resources if available, otherwise hallucinates strictly valid JSON
     const response = await ai.models.generateContent({
         model: "gemini-2.5-flash",
         contents: `Recommend 4 high-quality online learning resources (books, videos, or websites) for: ${query}. 
@@ -199,5 +215,5 @@ export const recommendResources = async (query: string): Promise<any[]> => {
         }
     });
     
-    return JSON.parse(response.text || "[]");
+    return parseJSON(response.text || "[]");
 }
